@@ -1,18 +1,25 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { SITE_STRUCTURE, CONTENT_DB, MOCK_PROFILES } from '../../constants';
-import { InteractionState, UserPost, Comment, UserProfile } from '../../types';
+import { SITE_STRUCTURE, CONTENT_DB, MOCK_PROFILES, LOGO_URL, THEMES } from '../../constants';
+import { InteractionState, UserPost, Comment, UserProfile, InterfaceMode } from '../../types';
 import { UserProfileView } from './UserProfile';
-import { AttachmentDisplay, CommentTree, HazardOctagon, getPostStats, CensoredWrapper } from '../SharedComponents';
-import { ArrowBigUp, ArrowBigDown, MessageSquare, Search, Bell, Plus, Send, ChevronDown, Image as ImageIcon, Share2, Bookmark, Hash, UserPlus, Shield, Bot, Globe, Users, Lock, Paperclip, AlertTriangle } from 'lucide-react';
+import { AttachmentDisplay, CommentTree, HazardOctagon, getPostStats, CensoredWrapper, UserAvatar, HistoryViewer } from '../SharedComponents';
+// Added ArrowLeft to imports
+import { ArrowBigUp, ArrowBigDown, MessageSquare, Search, Bell, Plus, Send, ChevronDown, Image as ImageIcon, Share2, Bookmark, Hash, UserPlus, Shield, Bot, Globe, Users, Lock, Paperclip, AlertTriangle, MoreHorizontal, Edit2, Monitor, Palette, History, ArrowLeft } from 'lucide-react';
 
 interface Web2ViewProps {
     openReader: (key: string) => void;
     interactions: InteractionState;
     onVote: (key: string, direction: 1 | -1) => void;
     onComment: (key: string, text: string, image?: string, parentId?: string, tags?: string[]) => void;
+    onEditComment?: (postKey: string, commentId: string, newText: string) => void;
     userPosts: UserPost[];
-    onOpenPostModal: (data?: {title?: string, body?: string, category?: string}) => void;
+    onOpenPostModal: (data?: {id?: string, title?: string, body?: string, category?: string, image?: string, tags?: string[]}) => void;
     onOpenSpinOff: (postId: string, commentId: string) => void;
+    currentMode: InterfaceMode;
+    currentTheme: string;
+    onModeChange: (mode: InterfaceMode) => void;
+    onThemeChange: (theme: string) => void;
 }
 
 const timeAgo = (timestamp: number) => {
@@ -68,7 +75,7 @@ const SaveDropdown: React.FC<SaveDropdownProps> = ({ isSaved, onToggleSave, cate
                 className={`flex items-center gap-1 hover:bg-white/10 p-2 octo-btn transition-colors ${isSaved ? 'text-yellow-500' : ''}`}
                 onClick={handleMainClick}
             >
-                <Bookmark size={16} fill={isSaved ? "currentColor" : "none"} /> {isSaved ? 'Saved' : 'Save'}
+                <Bookmark size={16} fill={isSaved ? "currentColor" : "none"} /> <span className="hidden sm:inline">{isSaved ? 'Saved' : 'Save'}</span>
             </button>
 
             {isOpen && (
@@ -89,23 +96,69 @@ const SaveDropdown: React.FC<SaveDropdownProps> = ({ isSaved, onToggleSave, cate
     );
 };
 
-export const Web2View: React.FC<Web2ViewProps> = ({ openReader, interactions, onVote, onComment, userPosts, onOpenPostModal, onOpenSpinOff }) => {
+const HeaderDropdown: React.FC<{ 
+    icon: React.ReactNode, 
+    label?: string, 
+    children: React.ReactNode 
+}> = ({ icon, label, children }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const ref = useRef<HTMLDivElement>(null);
+    
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (ref.current && !ref.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    return (
+        <div className="relative" ref={ref}>
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className={`flex items-center gap-2 hover:bg-white/10 p-2 octo-btn transition-colors ${isOpen ? 'text-accent' : 'text-text-secondary'}`}
+                title={label}
+            >
+                {icon}
+            </button>
+            {isOpen && (
+                <div className="absolute top-full right-0 mt-2 w-48 bg-bg-card border border-border-custom shadow-xl octo-clip z-50 flex flex-col animate-fade-in max-h-[300px] overflow-y-auto custom-scrollbar">
+                    {children}
+                </div>
+            )}
+        </div>
+    );
+};
+
+export const Web2View: React.FC<Web2ViewProps> = ({ 
+    openReader, 
+    interactions, 
+    onVote, 
+    onComment, 
+    onEditComment, 
+    userPosts, 
+    onOpenPostModal, 
+    onOpenSpinOff,
+    currentMode,
+    currentTheme,
+    onModeChange,
+    onThemeChange
+}) => {
     const [activeTab, setActiveTab] = useState('Club');
     const [sortBy, setSortBy] = useState<'Hot' | 'New' | 'Top'>('Hot');
     const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
     const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
     const [commentImages, setCommentImages] = useState<Record<string, string>>({}); 
     const [commentHazard, setCommentHazard] = useState<Record<string, boolean>>({});
+    const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
     
-    // View State (Feed vs Profile)
     const [viewingProfile, setViewingProfile] = useState<string | null>(null);
-
-    // Reply state
     const [replyingTo, setReplyingTo] = useState<string | null>(null);
     const [replyText, setReplyText] = useState('');
     const [replyFile, setReplyFile] = useState<string | null>(null);
-
-    // Feature State
+    const [viewingHistoryId, setViewingHistoryId] = useState<string | null>(null);
     const [savedPosts, setSavedPosts] = useState<Set<string>>(new Set());
     const [showToast, setShowToast] = useState(false);
     const [toastMessage, setToastMessage] = useState('');
@@ -189,7 +242,6 @@ export const Web2View: React.FC<Web2ViewProps> = ({ openReader, interactions, on
         }
     };
 
-    // --- PROFILE VIEW RENDER ---
     if (viewingProfile && MOCK_PROFILES[viewingProfile]) {
         return (
             <div className="w-full h-screen overflow-y-auto bg-bg-core text-text-primary font-main relative">
@@ -215,12 +267,9 @@ export const Web2View: React.FC<Web2ViewProps> = ({ openReader, interactions, on
         );
     }
 
-    // --- FEED VIEW RENDER LOGIC ---
-
     const renderFeed = () => {
         let posts: any[] = [];
         const sectionData = SITE_STRUCTURE[activeTab];
-
         if (!sectionData) return <div>Section not found.</div>;
 
         const createPost = (key: string, sub: string) => {
@@ -228,397 +277,186 @@ export const Web2View: React.FC<Web2ViewProps> = ({ openReader, interactions, on
             const interaction = interactions[key] || { votes: 0, userVote: 0, comments: [], timestamp: Date.now() };
             const title = content ? content.title : key;
             const body = content ? content.body.replace(/<[^>]*>?/gm, '') : "";
-            return {
-                id: key, title: title, body: body, sub: `r/${sub}`, author: 'admin', key: key, ...interaction
-            };
+            return { id: key, title: title, body: body, sub: `r/${sub}`, author: 'admin', key: key, ...interaction };
         };
 
         const createResourcePost = (item: any, sub: string) => {
             const interaction = interactions[item.title] || { votes: 0, userVote: 0, comments: [], timestamp: Date.now() };
-            return {
-                id: item.title, title: item.title, body: item.desc, sub: `r/${sub.replace(/\s/g,'')}`, author: 'mod', key: item.title, ...interaction
-            };
+            return { id: item.title, title: item.title, body: item.desc, sub: `r/${sub.replace(/\s/g,'')}`, author: 'mod', key: item.title, ...interaction };
         };
 
         const createUserPostObject = (p: UserPost) => {
             const interaction = interactions[p.id] || { votes: 0, userVote: 0, comments: [], timestamp: p.timestamp };
-            return {
-                id: p.id, title: p.title, body: p.body, sub: `r/${p.category}`, author: p.author, key: p.id, image: p.image, tags: p.tags, ...interaction
-            };
+            return { id: p.id, title: p.title, body: p.body, sub: `r/${p.category}`, author: p.author, key: p.id, image: p.image, tags: p.tags, editHistory: p.editHistory, ...interaction };
         }
 
         if (sectionData.type === 'single' && sectionData.key) {
-            const post = createPost(sectionData.key, activeTab);
-            if (post) posts.push(post);
+            const post = createPost(sectionData.key, activeTab); if (post) posts.push(post);
         } else if (sectionData.type === 'list' && sectionData.items) {
-            sectionData.items.forEach((key: string) => {
-                const post = createPost(key, activeTab);
-                if (post) posts.push(post);
-            });
+            sectionData.items.forEach((key: string) => { const post = createPost(key, activeTab); if (post) posts.push(post); });
         } else if (sectionData.type === 'grouped' && sectionData.groups) {
-            Object.entries(sectionData.groups).forEach(([groupName, items]) => {
-                (items as any[]).forEach(item => posts.push(createResourcePost(item, groupName)));
-            });
+            Object.entries(sectionData.groups).forEach(([groupName, items]) => { (items as any[]).forEach(item => posts.push(createResourcePost(item, groupName))); });
         }
-
         userPosts.filter(p => p.category === activeTab).forEach(p => posts.push(createUserPostObject(p)));
-
-        if (posts.length === 0) return <div className="p-4 text-center text-text-secondary">No posts in this community yet.</div>;
 
         posts.sort((a, b) => {
             if (sortBy === 'New') return b.timestamp - a.timestamp;
             if (sortBy === 'Top') return b.votes - a.votes;
-            const getHotScore = (post: any) => {
-                const hours = (Date.now() - post.timestamp) / (1000 * 60 * 60);
-                return (post.votes + 1) / Math.pow(hours + 2, 1.5);
-            };
+            const getHotScore = (post: any) => { const hours = (Date.now() - post.timestamp) / (1000 * 60 * 60); return (post.votes + 1) / Math.pow(hours + 2, 1.5); };
             return getHotScore(b) - getHotScore(a);
         });
 
-        return posts.map(post => {
-            const isUpvoted = post.userVote === 1;
-            const isDownvoted = post.userVote === -1;
-            const hasImage = !!commentImages[post.key];
-            const isSaved = savedPosts.has(post.id);
-            const isCensored = post.tags?.includes('nsfw') || post.tags?.includes('dark_arts');
-            
-            // Truncation Logic
-            const TRUNCATE_LIMIT = 141;
-            const shouldTruncate = post.body.length > TRUNCATE_LIMIT;
+        const viewingPost = viewingHistoryId ? posts.find(p => p.id === viewingHistoryId) : null;
 
-            const countComments = (comments: Comment[]): number => {
-                return comments.reduce((acc, c) => acc + 1 + (c.replies ? countComments(c.replies) : 0), 0);
-            };
-            const totalComments = countComments(post.comments);
-            
-            // Calculate Stats for Octagon
-            const postStats = getPostStats(post.comments);
+        return (
+            <>
+                {viewingPost && viewingPost.editHistory && (
+                    <HistoryViewer history={viewingPost.editHistory} currentText={viewingPost.body} currentImage={viewingPost.image} onClose={() => setViewingHistoryId(null)} />
+                )}
+                {posts.map(post => {
+                    const isUpvoted = post.userVote === 1;
+                    const isDownvoted = post.userVote === -1;
+                    const hasImage = !!commentImages[post.key];
+                    const isSaved = savedPosts.has(post.id);
+                    const isCensored = post.tags?.includes('nsfw') || post.tags?.includes('dark_arts');
+                    const isAuthor = post.author === 'guest_user';
+                    const TRUNCATE_LIMIT = 141;
+                    const shouldTruncate = post.body.length > TRUNCATE_LIMIT;
+                    const countComments = (comments: Comment[]): number => comments.reduce((acc, c) => acc + 1 + (c.replies ? countComments(c.replies) : 0), 0);
+                    const totalComments = countComments(post.comments);
+                    const postStats = getPostStats(post.comments);
 
-            return (
-                <div 
-                    key={post.id}
-                    className="group relative mb-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
-                >
-                    {/* Border / Hover Gradient Background */}
-                    <div className="absolute inset-0 bg-border-custom group-hover:bg-accent octo-clip transition-colors"></div>
-                    
-                    {/* Content Container */}
-                    <div className="relative p-[1px] m-[1px] bg-bg-card octo-clip h-[calc(100%-2px)] w-[calc(100%-2px)] flex flex-col">
-                        <div className="flex bg-bg-card octo-clip h-full w-full">
-                            <div className="w-10 bg-black/10 border-r border-border-custom flex flex-col items-center py-2 gap-1 text-text-secondary font-bold text-sm">
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); onVote(post.key, 1); }}
-                                    className={`p-1 transition-all duration-200 active:scale-75 focus:outline-none ${isUpvoted ? 'text-orange-500 scale-110 bg-orange-500/10' : 'hover:text-orange-500 hover:bg-black/10'}`}
-                                >
-                                    <ArrowBigUp size={24} fill={isUpvoted ? "currentColor" : "none"} className={`transition-all duration-300 ${isUpvoted ? 'drop-shadow-[0_0_5px_rgba(249,115,22,0.6)]' : ''}`} />
-                                </button>
-                                <span 
-                                    key={post.votes}
-                                    className={`${isUpvoted ? 'text-orange-500' : isDownvoted ? 'text-indigo-500' : ''}`}
-                                    style={{ animation: 'votePop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)' }}
-                                >
-                                    {post.votes}
-                                </span>
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); onVote(post.key, -1); }}
-                                    className={`p-1 transition-all duration-200 active:scale-75 focus:outline-none ${isDownvoted ? 'text-indigo-500 scale-110 bg-indigo-500/10' : 'hover:text-indigo-500 hover:bg-black/10'}`}
-                                >
-                                    <ArrowBigDown size={24} fill={isDownvoted ? "currentColor" : "none"} className={`transition-all duration-300 ${isDownvoted ? 'drop-shadow-[0_0_5px_rgba(99,102,241,0.6)]' : ''}`} />
-                                </button>
-                            </div>
-
-                            <div className="flex-1 p-2 cursor-pointer bg-bg-card" onClick={() => !post.id.startsWith('post-') && openReader(post.key)}>
-                                <div className="flex gap-4">
-                                    <div className="flex-1 min-w-0">
-                                        <div className="text-xs text-text-secondary mb-1 flex items-center gap-1 flex-wrap">
-                                            <span className="font-bold text-text-primary">{post.sub}</span>
-                                            <span>•</span>
-                                            <span className="flex items-center gap-2">
-                                                Posted by u/
-                                                <span className="hover:underline cursor-pointer" onClick={(e) => { e.stopPropagation(); handleUserClick(post.author); }}>
-                                                    {post.author}
-                                                </span>
-                                                {post.author === 'admin' && <span className="bg-accent text-white text-[9px] px-1.5 py-0.5 font-bold octo-tag flex items-center gap-1 tracking-wider"><Shield size={8} fill="currentColor" /> ADMIN</span>}
-                                                {post.author === 'mod' && <span className="bg-green-600 text-white text-[9px] px-1.5 py-0.5 font-bold octo-tag flex items-center gap-1 tracking-wider"><Shield size={8} fill="currentColor" /> MOD</span>}
-                                                {post.author === 'system_daemon' && <span className="bg-purple-500 text-white text-[9px] px-1.5 py-0.5 font-bold octo-tag flex items-center gap-1 tracking-wider"><Bot size={8} fill="currentColor" /> BOT</span>}
-                                            </span>
-                                            <span>•</span>
-                                            <span>{timeAgo(post.timestamp)}</span>
-                                            {isCensored && <span className="text-[9px] text-red-500 border border-red-500 px-1 rounded uppercase font-bold">NSFW</span>}
-                                        </div>
-                                        <div className="text-lg font-semibold mb-2 text-text-primary">{post.title}</div>
-                                        
-                                        <CensoredWrapper isCensored={isCensored} type="post">
-                                            <div className="text-sm text-text-secondary mb-2 whitespace-pre-wrap">
-                                                {shouldTruncate ? `${post.body.substring(0, TRUNCATE_LIMIT)}` : post.body}
-                                                {shouldTruncate && (
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); openReader(post.key); }}
-                                                        className="ml-2 inline-flex items-center gap-1 bg-bg-core border border-border-custom px-2 py-0.5 text-[10px] uppercase font-bold text-accent hover:bg-accent hover:text-white transition-colors octo-btn"
-                                                    >
-                                                        ...Continue <ChevronDown size={10} className="-rotate-90"/>
-                                                    </button>
-                                                )}
-                                            </div>
-                                            
-                                            {post.image && (
-                                                <div className="mb-4">
-                                                    <AttachmentDisplay data={post.image} className="w-full" />
+                    return (
+                        <div key={post.id} className="group relative mb-4 transition-all duration-300 hover:shadow-xl md:hover:-translate-y-1">
+                            <div className="absolute inset-0 bg-border-custom group-hover:bg-accent octo-clip transition-colors"></div>
+                            <div className="relative p-[1px] m-[1px] bg-bg-card octo-clip flex flex-col">
+                                <div className="flex bg-bg-card octo-clip">
+                                    <div className="w-10 sm:w-12 bg-black/10 border-r border-border-custom flex flex-col items-center py-3 gap-1 text-text-secondary font-bold text-xs sm:text-sm">
+                                        <button onClick={(e) => { e.stopPropagation(); onVote(post.key, 1); }} className={`p-1 transition-all ${isUpvoted ? 'text-orange-500 scale-110' : 'hover:text-orange-500'}`}><ArrowBigUp size={24} fill={isUpvoted ? "currentColor" : "none"} /></button>
+                                        <span className={isUpvoted ? 'text-orange-500' : isDownvoted ? 'text-indigo-500' : ''}>{post.votes}</span>
+                                        <button onClick={(e) => { e.stopPropagation(); onVote(post.key, -1); }} className={`p-1 transition-all ${isDownvoted ? 'text-indigo-500 scale-110' : 'hover:text-indigo-500'}`}><ArrowBigDown size={24} fill={isDownvoted ? "currentColor" : "none"} /></button>
+                                    </div>
+                                    <div className="flex-1 p-3 cursor-pointer" onClick={() => !post.id.startsWith('post-') && openReader(post.key)}>
+                                        <div className="flex flex-col sm:flex-row gap-3">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="text-[10px] sm:text-xs text-text-secondary mb-1 flex items-center gap-1 flex-wrap">
+                                                    <span className="font-bold text-text-primary">{post.sub}</span>
+                                                    <span>•</span>
+                                                    <div className="flex items-center gap-1 hover:bg-white/5 rounded px-1" onClick={(e) => { e.stopPropagation(); handleUserClick(post.author); }}>
+                                                         <UserAvatar username={post.author} size="w-3.5 h-3.5 sm:w-4 h-4" />
+                                                         <span className="font-bold hover:underline truncate max-w-[80px] sm:max-w-none">u/{post.author}</span>
+                                                    </div>
+                                                    <span>•</span>
+                                                    <span>{timeAgo(post.timestamp)}</span>
+                                                    {isCensored && <span className="text-[9px] text-red-500 border border-red-500 px-1 rounded uppercase font-bold">NSFW</span>}
                                                 </div>
-                                            )}
-                                        </CensoredWrapper>
-
-                                        <div className="flex gap-2 text-xs font-bold text-text-secondary">
-                                            <button 
-                                                className="flex items-center gap-1 hover:bg-white/10 p-2 octo-btn transition-colors"
-                                                onClick={(e) => { e.stopPropagation(); toggleComments(post.key); }}
-                                            >
-                                                <MessageSquare size={16}/> {totalComments} Comments
-                                            </button>
-                                            
-                                            <button 
-                                                className="flex items-center gap-1 hover:bg-white/10 p-2 octo-btn transition-colors group"
-                                                onClick={handleShare}
-                                            >
-                                                <Share2 size={16} className="group-active:scale-90 transition-transform" /> Share
-                                            </button>
-
-                                            <SaveDropdown 
-                                                isSaved={isSaved} 
-                                                onToggleSave={() => toggleSave(post.id)} 
-                                                category={post.sub}
-                                            />
+                                                <div className="text-base sm:text-lg font-semibold mb-2 text-text-primary leading-tight">{post.title}</div>
+                                                <CensoredWrapper isCensored={isCensored} type="post">
+                                                    <div className="text-xs sm:text-sm text-text-secondary mb-3 whitespace-pre-wrap line-clamp-4">
+                                                        {shouldTruncate ? `${post.body.substring(0, TRUNCATE_LIMIT)}...` : post.body}
+                                                    </div>
+                                                    {post.image && <div className="mb-4"><AttachmentDisplay data={post.image} className="w-full rounded-lg" /></div>}
+                                                </CensoredWrapper>
+                                                <div className="flex flex-wrap gap-1 sm:gap-2 text-[10px] sm:text-xs font-bold text-text-secondary">
+                                                    <button className="flex items-center gap-1 hover:bg-white/10 p-1.5 sm:p-2 octo-btn" onClick={(e) => { e.stopPropagation(); toggleComments(post.key); }}><MessageSquare size={16}/> {totalComments} <span className="hidden sm:inline">Comments</span></button>
+                                                    <button className="flex items-center gap-1 hover:bg-white/10 p-1.5 sm:p-2 octo-btn" onClick={handleShare}><Share2 size={16} /> <span className="hidden sm:inline">Share</span></button>
+                                                    <SaveDropdown isSaved={isSaved} onToggleSave={() => toggleSave(post.id)} category={post.sub} />
+                                                    {isAuthor && <button className="flex items-center gap-1 hover:bg-white/10 p-1.5 sm:p-2 octo-btn" onClick={(e) => { e.stopPropagation(); onOpenPostModal({ id: post.id, title: post.title, body: post.body, category: post.category, image: post.image, tags: post.tags }); }}><Edit2 size={16} /> <span className="hidden sm:inline">Edit</span></button>}
+                                                </div>
+                                            </div>
+                                            {postStats.count > 0 && <div className="sm:pt-2 flex justify-end sm:block"><HazardOctagon count={postStats.count} depth={postStats.depth} contributors={postStats.contributors} hasHazard={postStats.hasHazard} className="w-10 h-10 sm:w-14 sm:h-14" onClick={(e) => { e.stopPropagation(); toggleComments(post.key); }} /></div>}
                                         </div>
                                     </div>
-                                    
-                                    {/* Post Indicator - Attached Right */}
-                                    {postStats.count > 0 && (
-                                        <div className="pt-2">
-                                            <HazardOctagon 
-                                                count={postStats.count} 
-                                                depth={postStats.depth} 
-                                                contributors={postStats.contributors} 
-                                                hasHazard={postStats.hasHazard}
-                                                onClick={(e) => { e.stopPropagation(); toggleComments(post.key); }}
-                                            />
-                                        </div>
-                                    )}
                                 </div>
-                            </div>
-                        </div>
-
-                        {expandedComments[post.key] && (
-                            <div className="bg-bg-core/30 border-t border-border-custom p-4 animate-fade-in">
-                                {commentImages[post.key] && (
-                                    <div className="mb-2">
-                                        <AttachmentDisplay data={commentImages[post.key]} className="max-w-xs" onClear={() => clearImage(post.key)} />
+                                {expandedComments[post.key] && (
+                                    <div className="bg-bg-core/30 border-t border-border-custom p-3 sm:p-4 animate-fade-in">
+                                        <div className="flex gap-2 mb-4 items-end">
+                                            <input type="file" id={`file-input-${post.key}`} accept={ALLOWED_FILE_TYPES} className="hidden" onChange={(e) => handleFileSelect(post.key, e)} />
+                                            <button onClick={() => document.getElementById(`file-input-${post.key}`)?.click()} className={`p-2 sm:p-2.5 octo-btn border border-border-custom transition-colors ${hasImage ? 'text-accent border-accent' : 'bg-bg-core text-text-secondary'}`}><Paperclip size={16} /></button>
+                                            <div className="flex-1 p-[1px] bg-border-custom octo-btn focus-within:bg-accent transition-colors">
+                                                <input type="text" className="w-full bg-bg-core px-3 py-1.5 sm:py-2 text-sm outline-none octo-btn text-text-primary" placeholder="Thoughts?" value={commentInputs[post.key] || ''} onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.key]: e.target.value }))} onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.key)} />
+                                            </div>
+                                            <button onClick={() => handleCommentSubmit(post.key)} className="bg-accent text-white p-2 sm:p-2.5 octo-btn disabled:opacity-50" disabled={!commentInputs[post.key] && !hasImage}><Send size={16} /></button>
+                                        </div>
+                                        <div className="max-h-[400px] sm:max-h-[500px] overflow-y-auto pr-1 sm:pr-2 space-y-3 comment-scrollbar">
+                                            {post.comments.map((comment: Comment) => (
+                                                <CommentTree key={comment.id} comment={comment} postKey={post.key} replyingTo={replyingTo} setReplyingTo={setReplyingTo} replyText={replyText} setReplyText={setReplyText} onReplySubmit={handleReplySubmit} onUserClick={handleUserClick} replyFile={replyFile} setReplyFile={setReplyFile} onSpinOff={(c) => onOpenSpinOff(post.key, c.id)} onEditComment={onEditComment} />
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
-
-                                <div className="flex gap-2 mb-4 items-end">
-                                    <div>
-                                        <input 
-                                            type="file" 
-                                            id={`file-input-${post.key}`}
-                                            accept={ALLOWED_FILE_TYPES}
-                                            className="hidden"
-                                            onChange={(e) => handleFileSelect(post.key, e)}
-                                        />
-                                        <button 
-                                            onClick={() => document.getElementById(`file-input-${post.key}`)?.click()}
-                                            className={`p-2.5 octo-btn border border-border-custom transition-colors ${hasImage ? 'text-accent bg-accent/10 border-accent' : 'bg-bg-core text-text-secondary hover:text-text-primary'}`}
-                                            title="Add Attachment"
-                                        >
-                                            <Paperclip size={16} />
-                                        </button>
-                                    </div>
-
-                                    <div className="flex-1 p-[1px] bg-border-custom octo-btn focus-within:bg-accent transition-colors">
-                                        <input 
-                                            type="text" 
-                                            className="w-full bg-bg-core px-3 py-2 text-sm outline-none octo-btn text-text-primary placeholder:text-text-secondary/50"
-                                            placeholder="What are your thoughts?"
-                                            value={commentInputs[post.key] || ''}
-                                            onChange={(e) => setCommentInputs(prev => ({ ...prev, [post.key]: e.target.value }))}
-                                            onKeyDown={(e) => e.key === 'Enter' && handleCommentSubmit(post.key)}
-                                        />
-                                    </div>
-                                    <button 
-                                        onClick={() => setCommentHazard(prev => ({ ...prev, [post.key]: !prev[post.key] }))}
-                                        className={`p-2 octo-btn border border-border-custom transition-colors ${commentHazard[post.key] ? 'bg-red-500/20 text-red-500 border-red-500' : 'bg-bg-core text-text-secondary hover:text-red-500'}`}
-                                        title="Mark Sensitive"
-                                    >
-                                        <AlertTriangle size={16} />
-                                    </button>
-                                    <button 
-                                        onClick={() => handleCommentSubmit(post.key)}
-                                        className="bg-accent text-white p-2 octo-btn hover:opacity-90 disabled:opacity-50"
-                                        disabled={!commentInputs[post.key] && !hasImage}
-                                    >
-                                        <Send size={16} />
-                                    </button>
-                                </div>
-
-                                <div className="max-h-[500px] overflow-y-auto pr-2 space-y-3 comment-scrollbar">
-                                    {post.comments.length === 0 && (
-                                        <div className="text-xs text-text-secondary italic">No comments yet. Be the first!</div>
-                                    )}
-                                    {post.comments.map((comment: Comment) => (
-                                        <CommentTree 
-                                            key={comment.id} 
-                                            comment={comment} 
-                                            postKey={post.key} 
-                                            replyingTo={replyingTo}
-                                            setReplyingTo={setReplyingTo}
-                                            replyText={replyText}
-                                            setReplyText={setReplyText}
-                                            onReplySubmit={handleReplySubmit}
-                                            onUserClick={handleUserClick}
-                                            replyFile={replyFile}
-                                            setReplyFile={setReplyFile}
-                                            onSpinOff={(c) => onOpenSpinOff(post.key, c.id)}
-                                        />
-                                    ))}
-                                </div>
                             </div>
-                        )}
-                    </div>
-                </div>
-            );
-        });
+                        </div>
+                    );
+                })}
+            </>
+        );
     };
 
     return (
         <div className="w-full h-screen overflow-y-auto bg-bg-core text-text-primary font-main relative">
-            <style>{`
-                @keyframes votePop {
-                    0% { transform: scale(1); }
-                    50% { transform: scale(1.5); }
-                    100% { transform: scale(1); }
-                }
-                .comment-scrollbar::-webkit-scrollbar {
-                    width: 6px;
-                }
-                .comment-scrollbar::-webkit-scrollbar-track {
-                    background: transparent;
-                }
-                .comment-scrollbar::-webkit-scrollbar-thumb {
-                    background: var(--border);
-                    border-radius: 3px;
-                }
-                .comment-scrollbar::-webkit-scrollbar-thumb:hover {
-                    background: var(--accent);
-                }
-                
-                /* Octagonal Aesthetic */
-                .octo-clip {
-                    clip-path: polygon(
-                        12px 0, 100% 0, 
-                        100% calc(100% - 12px), calc(100% - 12px) 100%, 
-                        0 100%, 0 12px
-                    );
-                }
-                .octo-btn {
-                    clip-path: polygon(
-                        6px 0, 100% 0, 
-                        100% calc(100% - 6px), calc(100% - 6px) 100%, 
-                        0 100%, 0 6px
-                    );
-                }
-                .octo-tag {
-                    clip-path: polygon(
-                        4px 0, 100% 0, 
-                        100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px
-                    );
-                }
-                .octo-avatar {
-                    clip-path: polygon(
-                        30% 0, 70% 0, 100% 30%, 
-                        100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%
-                    );
-                }
-            `}</style>
+            <style>{`.octo-clip { clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px); } .octo-btn { clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); }`}</style>
             
-            {/* Toast Notification */}
-            {showToast && (
-                <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[3000] bg-accent text-white px-4 py-2 octo-btn shadow-lg font-bold text-sm animate-fade-in">
-                    {toastMessage}
-                </div>
-            )}
-
-            <header className="sticky top-0 z-50 bg-bg-card border-b border-border-custom px-4 py-2 flex items-center justify-between">
-                <div className="flex items-center gap-2 font-bold text-xl cursor-pointer" onClick={() => setViewingProfile(null)}>
-                    <span className="w-8 h-8 octo-avatar bg-c-club text-white flex items-center justify-center text-sm">L</span>
-                    <span className="hidden md:block">Latent Space Club</span>
+            <header className="sticky top-0 z-[100] bg-bg-card border-b border-border-custom px-4 py-2 flex items-center justify-between">
+                <div className="flex items-center gap-3 font-bold text-xl cursor-pointer" onClick={() => setViewingProfile(null)}>
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 octo-avatar relative overflow-hidden bg-black border border-accent/50">
+                        <img src={LOGO_URL} className="w-full h-full object-cover" alt="LSC" />
+                    </div>
+                    <span className="hidden sm:block">Latent Space Club</span>
                 </div>
                 
-                <div className="flex-1 max-w-xl mx-4 relative hidden sm:block">
-                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
-                     <div className="w-full bg-border-custom p-[1px] octo-btn">
-                         <input type="text" placeholder="Search Latent Space" className="w-full bg-bg-core octo-btn py-2 pl-10 pr-4 focus:outline-none text-sm placeholder:text-text-secondary" />
+                <div className={`flex-1 max-w-xl mx-4 relative ${isMobileSearchOpen ? 'fixed inset-0 z-[200] bg-bg-card p-4 flex items-center' : 'hidden sm:block'}`}>
+                     {isMobileSearchOpen && <button onClick={() => setIsMobileSearchOpen(false)} className="mr-2 text-text-secondary"><ArrowLeft size={24}/></button>}
+                     <div className="flex-1 relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-secondary" size={18} />
+                        <div className="w-full bg-border-custom p-[1px] octo-btn">
+                            <input type="text" placeholder="Search Latent Space" className="w-full bg-bg-core octo-btn py-2 pl-10 pr-4 focus:outline-none text-sm" autoFocus={isMobileSearchOpen} />
+                        </div>
                      </div>
                 </div>
 
-                <div className="flex items-center gap-4 text-text-secondary">
-                    <Bell className="cursor-pointer hover:text-text-primary" />
-                    <button onClick={() => onOpenPostModal()} title="Create Post">
-                        <Plus className="cursor-pointer hover:text-accent transition-colors" />
-                    </button>
-                    <div 
-                        className="w-8 h-8 octo-avatar bg-gradient-to-tr from-accent to-c-info cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => handleUserClick('guest_user')}
-                        title="My Profile"
-                    ></div>
+                <div className="flex items-center gap-2 sm:gap-3 text-text-secondary">
+                    <button onClick={() => setIsMobileSearchOpen(true)} className="sm:hidden p-2 hover:bg-white/10 rounded-full"><Search size={20}/></button>
+                    <HeaderDropdown icon={<Palette size={18} />} label="Theme">
+                        <div className="bg-bg-core/50 p-2 border-b border-border-custom text-[10px] font-bold text-text-secondary uppercase tracking-wider">Theme</div>
+                        {Object.entries(THEMES).map(([key, config]) => (
+                            <button key={key} onClick={() => onThemeChange(key)} className="px-4 py-2 text-left hover:bg-accent hover:text-white flex items-center gap-2 text-xs transition-colors font-bold">
+                                <div className="w-3 h-3 border border-white/20 rounded-full" style={{background: config.colors['--bg-core']}}></div> {config.name}
+                            </button>
+                        ))}
+                    </HeaderDropdown>
+                    <button onClick={() => onOpenPostModal()} className="p-2 hover:bg-white/10 rounded-full"><Plus size={22}/></button>
+                    <div className="cursor-pointer ml-1" onClick={() => handleUserClick('guest_user')}><UserAvatar username="guest_user" size="w-8 h-8" /></div>
                 </div>
             </header>
 
-            <div className="bg-bg-card/50 border-b border-border-custom px-4 py-2 flex gap-4 overflow-x-auto">
+            <div className="bg-bg-card/50 border-b border-border-custom sticky top-[57px] z-[90] px-4 py-2 flex gap-4 overflow-x-auto scrollbar-hide backdrop-blur-md">
                 {Object.keys(SITE_STRUCTURE).map(cat => (
-                    <button 
-                        key={cat}
-                        onClick={() => setActiveTab(cat)}
-                        className={`px-3 py-1 octo-btn font-bold text-sm whitespace-nowrap transition-colors ${activeTab === cat ? 'bg-white/10 text-text-primary' : 'text-text-secondary hover:bg-white/5'}`}
-                    >
-                        {cat}
-                    </button>
+                    <button key={cat} onClick={() => setActiveTab(cat)} className={`px-3 py-1 octo-btn font-bold text-xs sm:text-sm whitespace-nowrap transition-colors ${activeTab === cat ? 'bg-white/10 text-text-primary border-b-2 border-accent' : 'text-text-secondary hover:bg-white/5'}`}>{cat}</button>
                 ))}
             </div>
 
             <div className="max-w-[1000px] mx-auto grid grid-cols-1 md:grid-cols-[1fr_312px] gap-6 p-4">
                 <div className="flex flex-col">
                     <div className="bg-bg-card border border-border-custom p-3 mb-4 flex gap-2 items-center cursor-text octo-clip" onClick={() => onOpenPostModal()}>
-                        <div className="w-8 h-8 octo-avatar bg-gradient-to-tr from-accent to-c-info"></div>
-                        <div className="flex-1 bg-bg-core border border-border-custom px-4 py-2 text-sm text-text-secondary octo-btn">
-                            Create Post
-                        </div>
+                        <UserAvatar username="guest_user" size="w-8 h-8" />
+                        <div className="flex-1 bg-bg-core border border-border-custom px-4 py-2 text-sm text-text-secondary octo-btn">Create Post</div>
                         <ImageIcon className="text-text-secondary" />
                     </div>
-
-                    <div className="flex justify-between items-center mb-4">
-                        <div className="text-sm font-bold text-text-secondary">
-                            {activeTab} Feed
-                        </div>
+                    <div className="flex justify-between items-center mb-4 px-1">
+                        <div className="text-xs sm:text-sm font-bold text-text-secondary uppercase tracking-widest">{activeTab} Feed</div>
                         <div className="relative inline-block text-left">
-                            <div className="bg-bg-card border border-border-custom octo-btn flex items-center">
-                                <select 
-                                    value={sortBy}
-                                    onChange={(e) => setSortBy(e.target.value as any)}
-                                    className="appearance-none bg-transparent px-4 py-2 pr-8 font-bold text-sm text-text-primary focus:outline-none cursor-pointer hover:bg-white/5 transition-colors"
-                                >
-                                    <option value="Hot">Hot</option>
-                                    <option value="New">New</option>
-                                    <option value="Top">Top</option>
-                                </select>
-                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary" size={16} />
-                            </div>
+                            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className="bg-bg-card border border-border-custom octo-btn px-4 py-1.5 font-bold text-xs sm:text-sm text-text-primary outline-none cursor-pointer">
+                                <option value="Hot">Hot</option>
+                                <option value="New">New</option>
+                                <option value="Top">Top</option>
+                            </select>
                         </div>
                     </div>
-                    
                     {renderFeed()}
                 </div>
 
-                <div className="hidden md:flex flex-col gap-4">
-                    {/* Sidebar Card Wrapper */}
+                <div className="flex flex-col gap-4">
                     <div className="p-[1px] bg-border-custom octo-clip">
                         <div className="bg-bg-card p-4 octo-clip h-full w-full">
                             <h3 className="text-sm font-bold text-text-secondary uppercase mb-3">About Community</h3>
@@ -627,70 +465,21 @@ export const Web2View: React.FC<Web2ViewProps> = ({ openReader, interactions, on
                                 <div>4.2k <span className="text-text-secondary font-normal">Members</span></div>
                                 <div>124 <span className="text-text-secondary font-normal">Online</span></div>
                             </div>
-                            <button className="w-full bg-accent text-white font-bold py-2 octo-btn hover:opacity-90 transition-opacity">Join</button>
+                            <button className="w-full bg-accent text-white font-bold py-2 octo-btn">Join</button>
                         </div>
                     </div>
-
-                    <div className="p-[1px] bg-border-custom octo-clip">
-                        <div className="bg-bg-card p-4 octo-clip h-full w-full">
-                             <h3 className="text-sm font-bold text-text-secondary uppercase mb-3">Trending Topics</h3>
+                    <div className="hidden md:block p-[1px] bg-border-custom octo-clip">
+                         <div className="bg-bg-card p-4 octo-clip h-full w-full">
+                             <h3 className="text-sm font-bold text-text-secondary uppercase mb-3">Trending</h3>
                              <div className="flex flex-col gap-2">
-                                {['MidjourneyV6', 'Sora', 'ControlNet', 'StableDiffusion', 'GenerativeVideo'].map(tag => (
+                                {['MidjourneyV6', 'Sora', 'StableDiffusion'].map(tag => (
                                     <div key={tag} className="flex justify-between items-center group cursor-pointer">
-                                        <span className="text-sm font-bold group-hover:text-accent transition-colors flex items-center gap-1">
-                                            <Hash size={14} className="text-text-secondary" /> {tag}
-                                        </span>
+                                        <span className="text-sm font-bold group-hover:text-accent transition-colors flex items-center gap-1"><Hash size={14} className="text-text-secondary" /> {tag}</span>
                                         <span className="text-xs text-text-secondary">{Math.floor(Math.random() * 100)}k</span>
                                     </div>
                                 ))}
                              </div>
                         </div>
-                    </div>
-
-                    <div className="p-[1px] bg-border-custom octo-clip">
-                         <div className="bg-bg-card p-4 octo-clip h-full w-full">
-                             <h3 className="text-sm font-bold text-text-secondary uppercase mb-3">Who to Follow</h3>
-                             <div className="flex flex-col gap-3">
-                                {[
-                                    { name: 'neural_net_ninja', type: 'Artist' },
-                                    { name: 'latent_explorer', type: 'Researcher' },
-                                    { name: 'gpu_hoarder', type: 'Engineer' }
-                                ].map(user => (
-                                    <div key={user.name} className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-8 h-8 octo-avatar bg-gradient-to-br from-text-secondary to-bg-core"></div>
-                                            <div className="flex flex-col">
-                                                <span 
-                                                    className="text-sm font-bold leading-none hover:underline cursor-pointer"
-                                                    onClick={() => handleUserClick(user.name)}
-                                                >
-                                                    {user.name}
-                                                </span>
-                                                <span className="text-[10px] text-text-secondary">{user.type}</span>
-                                            </div>
-                                        </div>
-                                        <button className="text-accent hover:bg-accent/10 p-1.5 octo-btn transition-colors">
-                                            <UserPlus size={16} />
-                                        </button>
-                                    </div>
-                                ))}
-                             </div>
-                        </div>
-                    </div>
-
-                    <div className="p-[1px] bg-border-custom octo-clip">
-                        <div className="bg-bg-card p-4 octo-clip h-full w-full">
-                            <h3 className="text-sm font-bold text-text-secondary uppercase mb-3">Rules</h3>
-                            <ol className="list-decimal ml-4 text-sm space-y-2 text-text-primary/80">
-                                 <li>No Hate Speech</li>
-                                 <li>Credit Artists</li>
-                                 <li>Label NSFW content</li>
-                            </ol>
-                        </div>
-                    </div>
-
-                    <div className="text-xs text-text-secondary text-center">
-                        © 2025 Latent Space Club. <br/> A decentralized collective.
                     </div>
                 </div>
             </div>

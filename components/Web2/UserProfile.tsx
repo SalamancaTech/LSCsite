@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserProfile, UserPost, InteractionState, ArtPiece, SubGallery } from '../../types';
-import { ArrowLeft, Grid, List, Image as ImageIcon, Heart, MessageSquare, Shield, Star, Bookmark, Share2, ArrowBigUp, ArrowBigDown, Send, X, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Grid, List, Image as ImageIcon, Heart, MessageSquare, Shield, Star, Bookmark, Share2, ArrowBigUp, ArrowBigDown, Send, X, ChevronDown, Sparkles, Tag } from 'lucide-react';
 
 interface UserProfileProps {
     profile: UserProfile;
@@ -25,6 +25,19 @@ export const UserProfileView: React.FC<UserProfileProps> = ({
     const [selectedGallery, setSelectedGallery] = useState<SubGallery | null>(null);
     const [selectedArt, setSelectedArt] = useState<ArtPiece | null>(null);
     const [commentText, setCommentText] = useState('');
+    
+    // Toggle for demo purposes (simulates changing user settings if it's the current user)
+    // In a real app this would trigger an API call.
+    // We check if it's "guest_user" (ourselves) to allow toggling.
+    const isSelf = profile.username === 'guest_user';
+    const [isCreatorMode, setIsCreatorMode] = useState(!!profile.isCreator);
+
+    const toggleCreatorMode = () => {
+        if (!isSelf) return;
+        setIsCreatorMode(!isCreatorMode);
+        // HACK: Update the reference object for this session so it reflects in other components
+        profile.isCreator = !isCreatorMode;
+    };
 
     const renderPostList = () => {
         if (userPosts.length === 0) return <div className="p-8 text-center text-text-secondary italic">No posts yet.</div>;
@@ -242,10 +255,22 @@ export const UserProfileView: React.FC<UserProfileProps> = ({
             <div className="max-w-5xl mx-auto w-full px-4 -mt-16 md:-mt-20 relative z-10 mb-8">
                 <div className="flex flex-col md:flex-row gap-6 items-end md:items-start">
                     {/* Avatar */}
-                    <div className="p-1 bg-bg-core octo-avatar shrink-0">
-                        <div className="w-32 h-32 md:w-40 md:h-40 bg-bg-card octo-avatar overflow-hidden border-4 border-bg-core">
+                    <div className="p-1 bg-bg-core octo-avatar shrink-0 relative group/pfp">
+                        <div className={`w-32 h-32 md:w-40 md:h-40 bg-bg-card octo-avatar overflow-hidden border-4 ${isCreatorMode ? 'border-accent creator-glow' : 'border-bg-core'}`}>
                             <img src={profile.avatar} className="w-full h-full object-cover" alt="Avatar" />
+                            {isCreatorMode && <div className="creator-shimmer absolute inset-0 pointer-events-none"></div>}
                         </div>
+                        {isSelf && (
+                            <div className="absolute bottom-0 right-0 z-20">
+                                <button 
+                                    onClick={toggleCreatorMode}
+                                    className={`p-2 rounded-full border border-border-custom shadow-lg transition-all active:scale-95 ${isCreatorMode ? 'bg-accent text-white' : 'bg-bg-card text-text-secondary hover:text-primary'}`}
+                                    title={isCreatorMode ? "Creator Mode Active" : "Enable Creator Mode"}
+                                >
+                                    <Sparkles size={16} fill={isCreatorMode ? "currentColor" : "none"} />
+                                </button>
+                            </div>
+                        )}
                     </div>
                     
                     {/* Details */}
@@ -255,7 +280,19 @@ export const UserProfileView: React.FC<UserProfileProps> = ({
                             <span className="text-text-secondary text-sm">@{profile.username}</span>
                             {profile.username === 'neural_net_ninja' && <span className="inline-flex items-center gap-1 bg-accent text-white text-[10px] font-bold px-2 py-0.5 octo-tag"><Shield size={10} fill="currentColor"/> PRO</span>}
                         </div>
-                        <p className="text-text-primary whitespace-pre-wrap text-sm max-w-xl">{profile.bio}</p>
+                        
+                        {/* User Tags */}
+                        {profile.userTags && profile.userTags.length > 0 && (
+                            <div className="flex flex-wrap gap-2 justify-center md:justify-start">
+                                {profile.userTags.map(tag => (
+                                    <span key={tag} className="inline-flex items-center gap-1 bg-bg-card border border-border-custom text-text-secondary text-[10px] font-bold px-2 py-1 octo-tag uppercase tracking-wide">
+                                        <Tag size={10} /> {tag}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+
+                        <p className="text-text-primary whitespace-pre-wrap text-sm max-w-xl mt-1">{profile.bio}</p>
                         
                         <div className="flex gap-6 mt-2 justify-center md:justify-start text-sm">
                             <div className="flex flex-col">

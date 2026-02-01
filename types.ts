@@ -44,6 +44,12 @@ export interface ThemeConfig {
     colors: ThemeColors;
 }
 
+export interface EditHistoryEntry {
+    text: string;
+    image?: string;
+    timestamp: number;
+}
+
 export interface Comment {
     id: string;
     author: string;
@@ -52,6 +58,7 @@ export interface Comment {
     image?: string;
     replies?: Comment[];
     tags?: string[]; // Added tags for hazard diamond
+    editHistory?: EditHistoryEntry[];
 }
 
 export interface PostInteraction {
@@ -72,6 +79,7 @@ export interface UserPost {
     timestamp: number;
     author: string;
     tags?: string[];
+    editHistory?: EditHistoryEntry[];
 }
 
 // --- NEW PROFILE TYPES ---
@@ -98,6 +106,8 @@ export interface UserProfile {
     avatar: string;
     banner: string;
     bio: string;
+    isCreator?: boolean;
+    userTags?: string[];
     stats: {
         followers: number;
         following: number;

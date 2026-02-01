@@ -1,4 +1,7 @@
+
 import { ContentDB, ResourceGroup, ThemeConfig, UserProfile } from './types';
+
+export const LOGO_URL = "https://github.com/SalamancaTech/LSCsite/blob/main/components/icons/LSC_icon_small_01.png?raw=true";
 
 export const CONTENT_DB: ContentDB = {
     "Charter": { title: "Community Charter", body: "<h1>Core Values</h1><p>We believe that AI is a tool for human expression, not a replacement for human spirit.</p><h2>Transparency</h2><p>We share workflows, prompts, and seeds openly. Gatekeeping is discouraged.</p><h2>Respect</h2><p>We critique the output, not the creator. Harassment is not tolerated.</p>" },
@@ -243,6 +246,8 @@ export const MOCK_PROFILES: Record<string, UserProfile> = {
         avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=ninja",
         banner: "https://picsum.photos/seed/ninja/800/300",
         bio: "Exploring the depths of the latent space. \nPrompt Engineer | Digital Surrealist",
+        isCreator: true,
+        userTags: ["Prompt Engineer", "3D Model", "VFX"],
         stats: { followers: 1205, following: 45, posts: 12 },
         galleries: [
             {
@@ -279,6 +284,8 @@ export const MOCK_PROFILES: Record<string, UserProfile> = {
         avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=guest",
         banner: "https://picsum.photos/seed/guest/800/300",
         bio: "Just visiting this universe. \nLearning to prompt.",
+        isCreator: false,
+        userTags: ["Novice", "Explorer"],
         stats: { followers: 2, following: 1, posts: 0 },
         galleries: [],
         collection: [],
@@ -290,6 +297,8 @@ export const MOCK_PROFILES: Record<string, UserProfile> = {
         avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=explorer",
         banner: "https://picsum.photos/seed/explore/800/300",
         bio: "Mapping the coordinates of imagination.",
+        isCreator: true,
+        userTags: ["Researcher", "Mod"],
         stats: { followers: 8500, following: 120, posts: 450 },
         galleries: [
              {
