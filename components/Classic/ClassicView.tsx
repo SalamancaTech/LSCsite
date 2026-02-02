@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { SITE_STRUCTURE, CONTENT_DB, CLASSIC_THEMES } from '../../constants';
-import { UserPost, InterfaceMode } from '../../types';
+import { UserPost } from '../../types';
 
 interface ClassicViewProps {
     openReader: (key: string) => void;
@@ -11,10 +10,9 @@ interface ClassicViewProps {
     onOpenPostModal: (data?: {title?: string, body?: string, category?: string}) => void;
     onOpenSpinOff: (postId: string, commentId: string) => void;
     onEditPost?: (postId: string, data: {title?: string, body?: string}) => void;
-    onModeChange: (mode: InterfaceMode) => void;
 }
 
-export const ClassicView: React.FC<ClassicViewProps> = ({ openReader, themeIndex, onToggleTheme, userPosts, onOpenPostModal, onOpenSpinOff, onEditPost, onModeChange }) => {
+export const ClassicView: React.FC<ClassicViewProps> = ({ openReader, themeIndex, onToggleTheme, userPosts, onOpenPostModal, onOpenSpinOff, onEditPost }) => {
     const theme = CLASSIC_THEMES[themeIndex];
     const [editingPostId, setEditingPostId] = useState<string | null>(null);
     const [editForm, setEditForm] = useState({ title: '', body: '' });
@@ -152,10 +150,6 @@ export const ClassicView: React.FC<ClassicViewProps> = ({ openReader, themeIndex
                         <button key={link} onClick={() => document.getElementById(`classic-${link.toLowerCase()}`)?.scrollIntoView({behavior: 'smooth'})} className="text-xs sm:text-lg font-bold underline bg-transparent border-none">[{link}]</button>
                     ))}
                     <button onClick={() => onOpenPostModal()} className="text-xs sm:text-lg font-bold underline text-red-600 animate-pulse bg-transparent border-none">[NEW]</button>
-                    <span className="text-lg opacity-50">|</span>
-                    <button onClick={() => onModeChange('web2')} className="text-xs sm:text-lg font-bold underline bg-transparent border-none">[v2.0]</button>
-                    <button onClick={() => onModeChange('zui')} className="text-xs sm:text-lg font-bold underline bg-transparent border-none">[v3.0]</button>
-                    <span className="text-lg opacity-50">|</span>
                     <button onClick={onToggleTheme} className="text-[9px] sm:text-xs bg-transparent border-none ml-2">[{theme.name}]</button>
                 </div>
 

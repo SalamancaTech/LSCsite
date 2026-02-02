@@ -23,9 +23,6 @@ export const HUD: React.FC<HUDProps> = ({
     const modeRef = useRef<HTMLDivElement>(null);
     const themeRef = useRef<HTMLDivElement>(null);
 
-    // Only show HUD in ZUI mode
-    if (currentMode !== 'zui') return null;
-
     // Close on click outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {

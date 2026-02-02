@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { THEMES, CONTENT_DB, SITE_STRUCTURE, GROUPED_RESOURCES, CLASSIC_THEMES } from './constants';
 import { InterfaceMode, InteractionState, PostInteraction, Comment, UserPost, EditHistoryEntry } from './types';
@@ -126,7 +125,7 @@ function App() {
     return (
         <div style={themeStyles} className="w-full h-screen overflow-hidden font-main text-text-primary bg-bg-core transition-colors duration-500">
             {mode === 'zui' && (<ZUIView openReader={openReader} currentTheme={themeKey} onModeChange={handleModeChange} onThemeChange={setThemeKey} />)}
-            {mode === 'classic' && (<ClassicView openReader={openReader} themeIndex={classicThemeIndex} onToggleTheme={() => setClassicThemeIndex(prev => (prev + 1) % CLASSIC_THEMES.length)} userPosts={userPosts} onOpenPostModal={handleOpenPostModal} onOpenSpinOff={handleOpenSpinOff} onEditPost={handleEditPost} onModeChange={handleModeChange} />)}
+            {mode === 'classic' && (<ClassicView openReader={openReader} themeIndex={classicThemeIndex} onToggleTheme={() => setClassicThemeIndex(prev => (prev + 1) % CLASSIC_THEMES.length)} userPosts={userPosts} onOpenPostModal={handleOpenPostModal} onOpenSpinOff={handleOpenSpinOff} onEditPost={handleEditPost} />)}
             {mode === 'web2' && (<Web2View openReader={openReader} interactions={interactions} onVote={handleVote} onComment={handleComment} onEditComment={handleEditComment} userPosts={userPosts} onOpenPostModal={handleOpenPostModal} onOpenSpinOff={handleOpenSpinOff} currentMode={mode} currentTheme={themeKey} onModeChange={handleModeChange} onThemeChange={setThemeKey} />)}
             
             <HUD currentMode={mode} currentTheme={themeKey} onModeChange={handleModeChange} onThemeChange={setThemeKey} onCycleMode={() => { const keys = Object.keys(THEMES); const idx = keys.indexOf(themeKey); setThemeKey(keys[(idx + 1) % keys.length]); }} />

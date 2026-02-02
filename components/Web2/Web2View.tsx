@@ -4,7 +4,8 @@ import { SITE_STRUCTURE, CONTENT_DB, MOCK_PROFILES, LOGO_URL, THEMES } from '../
 import { InteractionState, UserPost, Comment, UserProfile, InterfaceMode } from '../../types';
 import { UserProfileView } from './UserProfile';
 import { AttachmentDisplay, CommentTree, HazardOctagon, getPostStats, CensoredWrapper, UserAvatar, HistoryViewer } from '../SharedComponents';
-import { ArrowBigUp, ArrowBigDown, MessageSquare, Search, Bell, Plus, Send, ChevronDown, Image as ImageIcon, Share2, Bookmark, Hash, UserPlus, Shield, Bot, Globe, Users, Lock, Paperclip, AlertTriangle, MoreHorizontal, Edit2, Monitor, Palette, History, ArrowLeft, LayoutGrid } from 'lucide-react';
+// Added ArrowLeft to imports
+import { ArrowBigUp, ArrowBigDown, MessageSquare, Search, Bell, Plus, Send, ChevronDown, Image as ImageIcon, Share2, Bookmark, Hash, UserPlus, Shield, Bot, Globe, Users, Lock, Paperclip, AlertTriangle, MoreHorizontal, Edit2, Monitor, Palette, History, ArrowLeft } from 'lucide-react';
 
 interface Web2ViewProps {
     openReader: (key: string) => void;
@@ -173,25 +174,17 @@ export const Web2View: React.FC<Web2ViewProps> = ({
     };
 
     const toggleSave = (id: string) => {
-        let isSaving = false;
         setSavedPosts(prev => {
             const next = new Set(prev);
             if (next.has(id)) {
                 next.delete(id);
-                isSaving = false;
+                triggerToast("Post removed from bookmarks");
             } else {
                 next.add(id);
-                isSaving = true;
+                triggerToast("Post saved to bookmarks");
             }
             return next;
         });
-        
-        // Trigger toast outside of the state updater to avoid side-effect errors
-        if (savedPosts.has(id)) {
-             triggerToast("Post removed from bookmarks");
-        } else {
-             triggerToast("Post saved to bookmarks");
-        }
     };
 
     const handleShare = (e: React.MouseEvent) => {
@@ -320,13 +313,6 @@ export const Web2View: React.FC<Web2ViewProps> = ({
                 {viewingPost && viewingPost.editHistory && (
                     <HistoryViewer history={viewingPost.editHistory} currentText={viewingPost.body} currentImage={viewingPost.image} onClose={() => setViewingHistoryId(null)} />
                 )}
-                {/* TOAST NOTIFICATION */}
-                {showToast && (
-                    <div className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[9000] bg-bg-card border border-accent text-accent px-6 py-3 rounded-full shadow-[0_0_20px_rgba(var(--accent),0.3)] font-bold text-sm animate-fade-in flex items-center gap-2">
-                         <div className="w-2 h-2 bg-accent rounded-full animate-pulse"></div>
-                         {toastMessage}
-                    </div>
-                )}
                 {posts.map(post => {
                     const isUpvoted = post.userVote === 1;
                     const isDownvoted = post.userVote === -1;
@@ -431,21 +417,6 @@ export const Web2View: React.FC<Web2ViewProps> = ({
 
                 <div className="flex items-center gap-2 sm:gap-3 text-text-secondary">
                     <button onClick={() => setIsMobileSearchOpen(true)} className="sm:hidden p-2 hover:bg-white/10 rounded-full"><Search size={20}/></button>
-                    
-                    <HeaderDropdown icon={<LayoutGrid size={18} />} label="View">
-                         <div className="bg-bg-core/50 p-2 border-b border-border-custom text-[10px] font-bold text-text-secondary uppercase tracking-wider">Interface Mode</div>
-                         {['classic', 'web2', 'zui'].map((m) => (
-                            <button
-                                key={m}
-                                onClick={() => onModeChange(m as InterfaceMode)}
-                                className={`w-full px-4 py-2 text-left hover:bg-accent hover:text-white flex items-center justify-between text-xs transition-colors font-bold uppercase ${currentMode === m ? 'text-accent' : ''}`}
-                            >
-                                <span>{m === 'classic' ? 'v1.0 Classic' : m === 'web2' ? 'v2.0 Modern' : 'v3.0 Spatial'}</span>
-                                {currentMode === m && <div className="w-2 h-2 bg-current rounded-full"></div>}
-                            </button>
-                        ))}
-                    </HeaderDropdown>
-
                     <HeaderDropdown icon={<Palette size={18} />} label="Theme">
                         <div className="bg-bg-core/50 p-2 border-b border-border-custom text-[10px] font-bold text-text-secondary uppercase tracking-wider">Theme</div>
                         {Object.entries(THEMES).map(([key, config]) => (
